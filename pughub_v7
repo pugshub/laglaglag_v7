@@ -1,1 +1,514 @@
+repeat task.wait() until game:IsLoaded()
 
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local StatsService = game:GetService("Stats")
+local HttpService = game:GetService("HttpService")
+
+local function udim2ToTable(udim2)
+    if not udim2 then return nil end
+    return {
+        XScale = udim2.X.Scale,
+        XOffset = udim2.X.Offset,
+        YScale = udim2.Y.Scale,
+        YOffset = udim2.Y.Offset
+    }
+end
+
+local function tableToUDim2(t)
+    if not t then return nil end
+    return UDim2.new(t.XScale, t.XOffset, t.YScale, t.YOffset)
+end
+
+local SaveData = {
+    BatPos = nil,
+    SelfPos = nil,
+    Minimized = false
+}
+
+local DATA_KEY = "PugHub_SaveData_" .. game.GameId
+local DATA_FILE = DATA_KEY .. ".json"
+
+local function saveData()
+    local dataToSave = {
+        BatPos = SaveData.BatPos,
+        SelfPos = SaveData.SelfPos,
+        Minimized = SaveData.Minimized
+    }
+    
+    local dataString = HttpService:JSONEncode(dataToSave)
+
+    pcall(function()
+        if getgenv then
+            getgenv()[DATA_KEY] = dataToSave
+        end
+    end)
+
+    pcall(function()
+        local existing = CoreGui:FindFirstChild(DATA_KEY)
+        if existing then existing:Destroy() end
+
+        local dataStore = Instance.new("StringValue")
+        dataStore.Name = DATA_KEY
+        dataStore.Value = dataString
+        dataStore.Parent = CoreGui
+    end)
+
+    pcall(function()
+        if writefile then
+            writefile(DATA_FILE, dataString)
+        end
+    end)
+end
+
+local function loadData()
+    local loaded = false
+
+    pcall(function()
+        if getgenv and getgenv()[DATA_KEY] then
+            local data = getgenv()[DATA_KEY]
+            SaveData.BatPos = data.BatPos
+            SaveData.SelfPos = data.SelfPos
+            SaveData.Minimized = data.Minimized
+            loaded = true
+        end
+    end)
+
+    if loaded then return true end
+
+    pcall(function()
+        if isfile and readfile and isfile(DATA_FILE) then
+            local fileData = readfile(DATA_FILE)
+            local decoded = HttpService:JSONDecode(fileData)
+            if decoded then
+                SaveData.BatPos = decoded.BatPos
+                SaveData.SelfPos = decoded.SelfPos
+                SaveData.Minimized = decoded.Minimized
+                loaded = true
+            end
+        end
+    end)
+
+    if loaded then return true end
+
+    pcall(function()
+        local store = CoreGui:FindFirstChild(DATA_KEY)
+        if store and store:IsA("StringValue") then
+            local decoded = HttpService:JSONDecode(store.Value)
+            if decoded then
+                SaveData.BatPos = decoded.BatPos
+                SaveData.SelfPos = decoded.SelfPos
+                SaveData.Minimized = decoded.Minimized
+                loaded = true
+            end
+        end
+    end)
+
+    return loaded
+end
+
+loadData()
+
+local function purge(char)
+    if not char then return end
+    for _,v in ipairs(char:GetChildren()) do
+        if v:IsA("Accessory") then
+            v:Destroy()
+        end
+    end
+    char.ChildAdded:Connect(function(v)
+        if v:IsA("Accessory") then
+            task.wait()
+            if v.Parent then v:Destroy() end
+        end
+    end)
+end
+
+if LocalPlayer.Character then purge(LocalPlayer.Character) end
+LocalPlayer.CharacterAdded:Connect(purge)
+
+local BatGui = Instance.new("ScreenGui")
+BatGui.Name = "PugHub_Bat"
+pcall(function() BatGui.Parent = CoreGui end)
+if not BatGui.Parent then BatGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+local Frame = Instance.new("Frame", BatGui)
+Frame.Size = UDim2.new(0, 260, 0, 170)
+
+if SaveData.BatPos then
+    Frame.Position = tableToUDim2(SaveData.BatPos)
+else
+    Frame.Position = UDim2.new(0.5, -130, 0.35, 0)
+end
+
+Frame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+
+Frame:GetPropertyChangedSignal("Position"):Connect(function()
+    SaveData.BatPos = udim2ToTable(Frame.Position)
+    saveData()
+end)
+
+Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 2)
+local Stroke = Instance.new("UIStroke", Frame)
+Stroke.Color = Color3.fromRGB(255, 255, 255)
+Stroke.Thickness = 1.5
+
+local MC_FONT = Enum.Font.Arcade
+
+local Title = Instance.new("TextLabel", Frame)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "PUG HUB [BAT]"
+Title.Font = MC_FONT
+Title.TextSize = 20
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundTransparency = 1
+
+local MiniTitle = Instance.new("TextLabel", Frame)
+MiniTitle.Size = UDim2.new(0, 120, 0, 20)
+MiniTitle.Position = UDim2.new(0, 8, 0, 5)
+MiniTitle.BackgroundTransparency = 1
+MiniTitle.Text = "PUGHUB [V7]"
+MiniTitle.Font = MC_FONT
+MiniTitle.TextSize = 13
+MiniTitle.TextColor3 = Color3.new(1, 1, 1)
+MiniTitle.TextXAlignment = Enum.TextXAlignment.Left
+MiniTitle.Visible = false
+
+local function createSwitch(yPos, labelText)
+    local Label = Instance.new("TextLabel", Frame)
+    Label.Size = UDim2.new(0, 150, 0, 30)
+    Label.Position = UDim2.new(0, 15, 0, yPos)
+    Label.Text = labelText
+    Label.Font = MC_FONT
+    Label.TextSize = 14
+    Label.TextColor3 = Color3.new(1, 1, 1)
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.BackgroundTransparency = 1
+
+    local BG = Instance.new("Frame", Frame)
+    BG.Size = UDim2.new(0, 44, 0, 20)
+    BG.Position = UDim2.new(1, -60, 0, yPos + 5)
+    BG.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    BG.BorderSizePixel = 0
+
+    local Knob = Instance.new("Frame", BG)
+    Knob.Size = UDim2.new(0, 14, 0, 14)
+    Knob.Position = UDim2.new(0, 3, 0.5, -7)
+    Knob.BackgroundColor3 = Color3.new(1, 1, 1)
+    Knob.BorderSizePixel = 0
+
+    local Btn = Instance.new("TextButton", BG)
+    Btn.Size = UDim2.new(1, 0, 1, 0)
+    Btn.BackgroundTransparency = 1
+    Btn.Text = ""
+
+    return Btn, BG, Knob, Label
+end
+
+local BatBtn, BatBG, BatKnob, BatLabel = createSwitch(60, "> BAT LAG")
+
+local SpeedLabel = Instance.new("TextLabel", Frame)
+SpeedLabel.Size = UDim2.new(1, 0, 0, 20)
+SpeedLabel.Position = UDim2.new(0, 0, 0, 105)
+SpeedLabel.Text = "OVERCLOCK SPEED"
+SpeedLabel.Font = MC_FONT
+SpeedLabel.TextSize = 11
+SpeedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+SpeedLabel.BackgroundTransparency = 1
+
+local SpeedBox = Instance.new("TextBox", Frame)
+SpeedBox.Size = UDim2.new(0, 230, 0, 35)
+SpeedBox.Position = UDim2.new(0.5, -115, 0, 125)
+SpeedBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+SpeedBox.Text = "0.08"
+SpeedBox.TextColor3 = Color3.new(1, 1, 1)
+SpeedBox.Font = MC_FONT
+SpeedBox.TextSize = 14
+SpeedBox.BorderSizePixel = 0
+
+local SpeedStroke = Instance.new("UIStroke", SpeedBox)
+SpeedStroke.Color = Color3.fromRGB(50, 50, 50)
+
+local BatLagEnabled = false
+local Minimized = SaveData.Minimized or false
+
+local function toggleVisual(state, bg, knob)
+    local targetPos = state and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)
+    local targetCol = state and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(40, 40, 40)
+    local knobCol = state and Color3.new(0, 0, 0) or Color3.new(1, 1, 1)
+
+    TweenService:Create(knob, TweenInfo.new(0.15), {
+        Position = targetPos,
+        BackgroundColor3 = knobCol
+    }):Play()
+
+    TweenService:Create(bg, TweenInfo.new(0.15), {
+        BackgroundColor3 = targetCol
+    }):Play()
+end
+
+local MinimizeButton = Instance.new("TextButton", Frame)
+MinimizeButton.Size = UDim2.new(0, 24, 0, 24)
+MinimizeButton.Position = UDim2.new(1, -30, 0, 8)
+MinimizeButton.BackgroundTransparency = 1
+MinimizeButton.Text = "⌄"
+MinimizeButton.Font = MC_FONT
+MinimizeButton.TextSize = 18
+MinimizeButton.TextColor3 = Color3.new(1, 1, 1)
+
+local function applyMinimizedState()
+    if Minimized then
+        Frame.Size = UDim2.new(0, 260, 0, 85)
+        MinimizeButton.Text = ">"
+        Title.Visible = false
+        MiniTitle.Visible = true
+        SpeedBox.Visible = false
+        SpeedLabel.Visible = false
+        BatLabel.Position = UDim2.new(0, 15, 0, 25)
+        BatBG.Position = UDim2.new(0, 190, 0, 32)
+    else
+        Frame.Size = UDim2.new(0, 260, 0, 170)
+        MinimizeButton.Text = "⌄"
+        Title.Visible = true
+        MiniTitle.Visible = false
+        SpeedBox.Visible = true
+        SpeedLabel.Visible = true
+        BatLabel.Position = UDim2.new(0, 15, 0, 60)
+        BatBG.Position = UDim2.new(1, -60, 0, 65)
+    end
+end
+
+MinimizeButton.MouseButton1Click:Connect(function()
+    Minimized = not Minimized
+    SaveData.Minimized = Minimized
+    saveData()
+    applyMinimizedState()
+end)
+
+BatBtn.MouseButton1Click:Connect(function()
+    BatLagEnabled = not BatLagEnabled
+    toggleVisual(BatLagEnabled, BatBG, BatKnob)
+end)
+
+applyMinimizedState()
+
+task.spawn(function()
+    while true do
+        if BatLagEnabled then
+            local speed = tonumber(SpeedBox.Text) or 0.08
+            local char = LocalPlayer.Character
+            local backpack = LocalPlayer:FindFirstChild("Backpack")
+
+            if char and backpack then
+                local bat = backpack:FindFirstChild("Bat") or char:FindFirstChild("Bat")
+                if bat then
+                    local humanoid = char:FindFirstChildOfClass("Humanoid")
+                    if humanoid and bat.Parent ~= char then
+                        humanoid:EquipTool(bat)
+                    end
+                    task.wait(speed)
+                    if bat.Parent == char then
+                        bat.Parent = backpack
+                    end
+                else
+                    task.wait(0.1)
+                end
+            else
+                task.wait(0.1)
+            end
+        else
+            task.wait(0.2)
+        end
+    end
+end)
+
+local function unequipAll()
+    local char = LocalPlayer.Character
+    local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+    if humanoid then humanoid:UnequipTools() end
+end
+
+local function equip(toolName)
+    unequipAll()
+    task.wait(0.05)
+    local char = LocalPlayer.Character
+    local backpack = LocalPlayer.Backpack
+    local tool = backpack:FindFirstChild(toolName) or char:FindFirstChild(toolName)
+    if tool then
+        tool.Parent = char
+        return tool
+    end
+    return nil
+end
+
+local function runCloneSequence(targetCFrame)
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    equip("Flying Carpet")
+    task.wait(0.05)
+    hrp.CFrame = CFrame.new(-354.6, -7.0, 56.8)
+    task.wait(0.1)
+    hrp.Velocity = Vector3.new(0, 160, 0)
+    task.wait(0.3)
+    local southRotation = CFrame.Angles(0, math.rad(180), 0)
+    hrp.CFrame = targetCFrame * southRotation
+    task.wait(0.25)
+    local cloner = equip("Quantum Cloner")
+    if cloner then
+        task.wait(0.1)
+        cloner:Activate()
+    end
+end
+
+local TpScreenGui = Instance.new("ScreenGui", CoreGui)
+TpScreenGui.Name = "PugHub_UpperRight"
+
+local function createTPBtn(name, yOffset, cframe)
+    local btn = Instance.new("TextButton", TpScreenGui)
+    btn.Size = UDim2.new(0, 75, 0, 40)
+    btn.Position = UDim2.new(0.92, 0, 0.2, yOffset)
+    btn.Text = name
+    btn.Font = Enum.Font.Arcade
+    btn.TextSize = 18
+    btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    btn.BackgroundTransparency = 0.4
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.BorderSizePixel = 0
+    local StrokeBtn = Instance.new("UIStroke", btn)
+    StrokeBtn.Color = Color3.new(1, 1, 1)
+    StrokeBtn.Thickness = 1.5
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+    btn.MouseButton1Click:Connect(function()
+        runCloneSequence(cframe)
+    end)
+end
+
+createTPBtn("1D", 0, CFrame.new(-324.5, -3.6, 89.6))
+createTPBtn("2D", 50, CFrame.new(-325.7, 13.3, 89.6))
+createTPBtn("3D", 100, CFrame.new(-326.1, 30.3, 89.6))
+
+local StatsBar = Instance.new("Frame")
+StatsBar.Name = "PugHubStatsBar"
+StatsBar.Parent = BatGui
+StatsBar.Size = UDim2.new(0, 250, 0, 30)
+StatsBar.Position = UDim2.new(0.5, -125, 0, 35)
+StatsBar.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+StatsBar.BorderSizePixel = 0
+StatsBar.Active = false
+StatsBar.Draggable = false
+Instance.new("UICorner", StatsBar).CornerRadius = UDim.new(0, 2)
+local StrokeStats = Instance.new("UIStroke", StatsBar)
+StrokeStats.Color = Color3.fromRGB(255, 255, 255)
+StrokeStats.Thickness = 1.2
+
+local StatsText = Instance.new("TextLabel", StatsBar)
+StatsText.Size = UDim2.new(1, -8, 1, 0)
+StatsText.Position = UDim2.new(0, 4, 0, 0)
+StatsText.BackgroundTransparency = 1
+StatsText.Font = Enum.Font.Arcade
+StatsText.TextSize = 14
+StatsText.TextXAlignment = Enum.TextXAlignment.Center
+StatsText.TextColor3 = Color3.fromRGB(255, 255, 255)
+StatsText.Text = "PUGHUB[V8] | FPS:0 | PING:0"
+
+local fps = 0
+local frames = 0
+local lastUpdate = tick()
+RunService.RenderStepped:Connect(function()
+    frames += 1
+    if tick() - lastUpdate >= 1 then
+        fps = frames
+        frames = 0
+        lastUpdate = tick()
+        local ping = 0
+        pcall(function()
+            ping = math.floor(StatsService.Network.ServerStatsItem["Data Ping"]:GetValue())
+        end)
+        StatsText.Text = "PUGHUB[V8] | FPS:" .. fps .. " | PING:" .. ping
+    end
+end)
+
+local SelfGui = Instance.new("ScreenGui")
+SelfGui.Name = "PugHub_Self"
+pcall(function() SelfGui.Parent = CoreGui end)
+if not SelfGui.Parent then SelfGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+local SelfFrame = Instance.new("Frame")
+SelfFrame.Parent = SelfGui
+SelfFrame.Size = UDim2.new(0, 260, 0, 55)
+
+if SaveData.SelfPos then
+    SelfFrame.Position = tableToUDim2(SaveData.SelfPos)
+else
+    SelfFrame.Position = UDim2.new(0.5, -130, 0.5, 0)
+end
+
+SelfFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+SelfFrame.BorderSizePixel = 0
+SelfFrame.Active = true
+SelfFrame.Draggable = true
+
+SelfFrame:GetPropertyChangedSignal("Position"):Connect(function()
+    SaveData.SelfPos = udim2ToTable(SelfFrame.Position)
+    saveData()
+end)
+
+Instance.new("UICorner", SelfFrame).CornerRadius = UDim.new(0, 2)
+local SelfStroke = Instance.new("UIStroke", SelfFrame)
+SelfStroke.Color = Color3.fromRGB(255, 255, 255)
+SelfStroke.Thickness = 1.5
+
+local KillButton = Instance.new("TextButton", SelfFrame)
+KillButton.Size = UDim2.new(0, 115, 0, 28)
+KillButton.Position = UDim2.new(0, 10, 0, 12)
+KillButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+KillButton.BorderSizePixel = 0
+KillButton.Text = "RESET"
+KillButton.Font = Enum.Font.Arcade
+KillButton.TextSize = 13
+KillButton.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", KillButton).CornerRadius = UDim.new(0, 2)
+local KillStroke = Instance.new("UIStroke", KillButton)
+KillStroke.Color = Color3.fromRGB(255, 255, 255)
+KillStroke.Thickness = 1
+
+local LeaveButton = Instance.new("TextButton", SelfFrame)
+LeaveButton.Size = UDim2.new(0, 115, 0, 28)
+LeaveButton.Position = UDim2.new(0, 135, 0, 12)
+LeaveButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+LeaveButton.BorderSizePixel = 0
+LeaveButton.Text = "LEAVE"
+LeaveButton.Font = Enum.Font.Arcade
+LeaveButton.TextSize = 13
+LeaveButton.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", LeaveButton).CornerRadius = UDim.new(0, 2)
+local LeaveStroke = Instance.new("UIStroke", LeaveButton)
+LeaveStroke.Color = Color3.fromRGB(255, 255, 255)
+LeaveStroke.Thickness = 1
+
+KillButton.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.Health = 0 end
+    end
+end)
+
+LeaveButton.MouseButton1Click:Connect(function()
+    LocalPlayer:Kick("Left Game")
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(3)
+        saveData()
+    end
+end)
